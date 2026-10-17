@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Door Kiosk">
+<meta name="robots" content="noindex">
+<title>Alembic Door Kiosk</title>
+<style>
+:root{
+  --bg:#15110e; --bg2:#1f1915; --ink:#f4ecdc; --muted:#a39684; --line:#3a3029;
+  --accent:#e2a64b; --accent-ink:#2a1d0c;
+  --card:#fbf6ea; --card-ink:#1c1611; --card-muted:#6e6253;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,Menlo,"SF Mono",Consolas,monospace;
+  --pad:max(16px,2.2vmin);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
+body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  touch-action:manipulation;-webkit-text-size-adjust:100%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#app{position:relative;height:100%;display:flex;flex-direction:column}
+.stagewrap{flex:1;position:relative;min-height:0}
+.screen{position:absolute;inset:0;display:none;flex-direction:column}
+.screen.on{display:flex}
+
+/* ---------- top bar ---------- */
+.bar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:var(--pad) var(--pad) calc(var(--pad)*.6);border-bottom:1px solid var(--line)}
+.bar h1{font-family:var(--serif);font-weight:600;font-size:clamp(24px,4.4vmin,46px);line-height:1.05;letter-spacing:-.01em}
+.bar p{color:var(--muted);font-size:clamp(14px,2.1vmin,20px);margin-top:6px}
+.bar .phone{display:inline-block;width:.8em;height:1.15em;border:2px solid currentColor;border-radius:.18em;vertical-align:-.2em;margin-right:.4em;opacity:.8}
+.bar .titles{min-width:0}
+.bar .right{display:flex;align-items:center;gap:clamp(12px,2.4vmin,24px);flex:none}
+body.flyers #subline{display:none}
+.clock{font-family:var(--serif);font-size:clamp(20px,3.4vmin,36px);color:var(--accent);white-space:nowrap;text-align:right}
+.clock small{display:block;font-family:var(--sans);font-size:clamp(11px,1.5vmin,14px);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+
+/* ---------- QR grid ---------- */
+#qrStage{flex:1;position:relative;padding:var(--pad)}
+.grid{position:absolute;inset:var(--pad);display:grid;gap:var(--pad)}
+.card{background:var(--card);color:var(--card-ink);border-radius:18px;display:flex;flex-direction:column;
+  align-items:center;justify-content:space-between;text-align:center;overflow:hidden;
+  padding:calc(var(--u)*1.1) calc(var(--u)*1.2) calc(var(--u)*.9);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.card .head{width:100%}
+.card h2{font-family:var(--serif);font-weight:600;font-size:calc(var(--u)*1.55);line-height:1.12;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.card .cap{color:var(--card-muted);font-size:calc(var(--u)*.92);line-height:1.25;margin-top:calc(var(--u)*.3);
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;overflow:hidden}
+.card .meta{margin-top:calc(var(--u)*.45);font-size:calc(var(--u)*.92);font-weight:600;letter-spacing:.01em}
+.card .meta .when{display:inline-block;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:.12em .65em;margin-left:.35em}
+.card .meta .when.late{background:#2b2420;color:#f4ecdc}
+.card .qr{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;margin:calc(var(--u)*.45) 0 0}
+.card .qr svg{display:block;flex:none}
+.card .url{font-family:var(--mono);font-size:calc(var(--u)*.72);color:var(--card-muted);margin-top:calc(var(--u)*.25)}
+.card .soldout{flex:1;display:flex;align-items:center;justify-content:center;font-family:var(--serif);
+  font-size:calc(var(--u)*2.2);color:#8a2b1c;transform:rotate(-6deg)}
+.pager{position:absolute;left:0;right:0;bottom:4px;text-align:center;color:var(--muted);font-size:13px;letter-spacing:.1em}
+.pager i{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line);margin:0 4px}
+.pager i.on{background:var(--accent)}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;gap:14px}
+.empty h2{font-family:var(--serif);font-weight:500;font-size:clamp(26px,4.6vmin,44px)}
+.empty p{color:var(--muted);font-size:clamp(16px,2.4vmin,22px);max-width:34em}
+
+/* ---------- flyers ---------- */
+#track{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none}
+#track::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;width:100%;height:100%;scroll-snap-align:start;scroll-snap-stop:always;
+  display:flex;position:relative;overflow:hidden}
+.slide .art{position:relative;flex:1.65;min-width:0;min-height:0;overflow:hidden;background:var(--bg2)}
+.slide .art .blur{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;
+  filter:blur(28px) saturate(1.1);opacity:.45}
+.slide .art .img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.slide .info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:clamp(8px,1.6vmin,16px);
+  padding:clamp(20px,4vmin,48px)}
+.slide .date{font-family:var(--serif);color:var(--accent);font-size:clamp(20px,3.6vmin,34px);line-height:1.1}
+.slide .date small{display:block;font-family:var(--sans);color:var(--muted);font-size:clamp(13px,1.9vmin,17px);margin-top:6px}
+.slide h2{font-family:var(--serif);font-weight:600;font-size:clamp(26px,4.8vmin,50px);line-height:1.08;letter-spacing:-.01em;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+.slide .cap{color:var(--muted);font-size:clamp(15px,2.3vmin,21px);line-height:1.3;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.slide .mini{display:flex;align-items:center;gap:14px;margin-top:clamp(4px,1.4vmin,14px)}
+.slide .mini .qr{width:clamp(96px,17vmin,170px);height:clamp(96px,17vmin,170px);background:#fff;border-radius:10px;padding:0;flex:none}
+.slide .mini .qr svg{display:block;width:100%;height:100%}
+.slide .mini span{color:var(--muted);font-size:clamp(13px,1.9vmin,17px);line-height:1.35}
+.slide.text .art{display:flex;align-items:center;justify-content:center;padding:6vmin;
+  background:radial-gradient(120% 90% at 20% 10%,#3a2a1b 0%,var(--bg2) 55%,var(--bg) 100%)}
+.slide.text .art .mark{font-family:var(--serif);font-size:clamp(40px,10vmin,110px);line-height:1;color:var(--accent);opacity:.9;text-align:center}
+@media (orientation:portrait){
+  .slide{flex-direction:column}
+  .slide .art{flex:1.25}
+  .slide .info{flex:1;justify-content:flex-start}
+}
+.dots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:7px;pointer-events:none}
+.dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22)}
+.dots i.on{background:var(--accent)}
+.nav{position:absolute;top:50%;width:56px;height:56px;margin-top:-28px;border-radius:50%;border:0;
+  background:rgba(0,0,0,.35);color:var(--ink);font-size:30px;line-height:56px;text-align:center;opacity:.7}
+.nav.prev{left:10px}.nav.next{right:10px}
+
+/* ---------- mode toggle + status ---------- */
+#toggle{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:4px}
+#toggle button{border:0;background:transparent;color:var(--muted);font:600 15px var(--sans);padding:10px 16px;border-radius:999px}
+#toggle button.on{background:var(--accent);color:var(--accent-ink)}
+#status{position:absolute;right:var(--pad);top:4px;z-index:5;font-size:12px;color:var(--muted);
+  display:flex;align-items:center;gap:7px;pointer-events:none}
+#status i{width:8px;height:8px;border-radius:50%;background:#5f8f5a}
+#status.stale i{background:#d08a2e}
+#status.bad i{background:#c4452c}
+#status span{display:none}
+#status.stale span,#status.bad span{display:inline}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="bar">
+    <div class="titles">
+      <h1 id="headline"></h1>
+      <p id="subline"><span class="phone"></span><span id="qrSub"></span></p>
+    </div>
+    <div class="right">
+      <div id="toggle" role="tablist">
+        <button data-mode="qr">Tickets</button>
+        <button data-mode="flyers">Upcoming</button>
+      </div>
+      <div class="clock" id="clock"></div>
+    </div>
+  </header>
+  <div id="status"><i></i><span id="statusText"></span></div>
+  <div class="stagewrap">
+  <section id="qrScreen" class="screen">
+    <div id="qrStage"></div>
+  </section>
+
+  <section id="flyerScreen" class="screen">
+    <div style="flex:1;position:relative;display:flex;min-height:0">
+      <div id="track"></div>
+      <button class="nav prev" id="prev" aria-label="Previous">‹</button>
+      <button class="nav next" id="next" aria-label="Next">›</button>
+      <div class="dots" id="dots"></div>
+    </div>
+  </section>
+  </div>
+</div>
+
+<script src="qrcode.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var TZ = 'America/Los_Angeles';
+  var CFG = window.KIOSK_CONFIG || {};
+  var params = new URLSearchParams(location.search);
+  var FEED = params.get('feed') || CFG.feedUrl || '';
+  var USE_SAMPLE = params.get('sample') === '1' || !FEED;
+  var REFRESH_MS = Math.max(1, Number(CFG.refreshMinutes) || 5) * 60000;
+  var CACHE_KEY = 'doorKioskFeed_v1';
+
+  // ?now=2026-10-17T09:40 lets you preview any moment (clock keeps ticking from there)
+  var offset = 0;
+  if (params.get('now')) {
+    var t = Date.parse(params.get('now'));
+    if (!isNaN(t)) offset = t - Date.now();
+  }
+  function now() { return Date.now() + offset; }
+
+  var DEFAULTS = {
+    doors_before_min: 15, doors_after_min: 15,
+    max_codes_per_screen: 4, rotate_seconds: 15, flyer_days_ahead: 30, flyer_seconds: 12,
+    manual_timeout_min: 3,
+    qr_headline: 'Skip the line — buy your ticket here',
+    qr_subhead: 'Open your phone camera and point it at the code',
+    flyer_headline: 'Coming up at The Berkeley Alembic'
+  };
+
+  var feed = null, lastFetchOk = 0, lastFetchErr = '';
+  var manual = null;            // {mode, lastTouch}
+  var qrPage = 0, qrPageAt = Date.now(), qrSig = '', flyerSig = '';
+  var flyerIdx = 0, flyerTouchAt = 0, flyerAdvAt = Date.now();
+  var loadedAt = Date.now();
+
+  /* ---------------- utilities ---------------- */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function S(k) {
+    var v = feed && feed.settings && feed.settings[k];
+    if (v === undefined || v === null || v === '') return DEFAULTS[k];
+    return typeof DEFAULTS[k] === 'number' ? (isNaN(Number(v)) ? DEFAULTS[k] : Number(v)) : String(v);
+  }
+  var fmtCache = {};
+  function fmt(ms, opts) {
+    var key = JSON.stringify(opts);
+    if (!fmtCache[key]) {
+      var o = { timeZone: TZ }; for (var k in opts) o[k] = opts[k];
+      fmtCache[key] = new Intl.DateTimeFormat('en-US', o);
+    }
+    return fmtCache[key].format(new Date(ms));
+  }
+  function timeStr(ms) { return fmt(ms, { hour: 'numeric', minute: '2-digit' }).replace(':00', ''); }
+  function dayKey(ms) { return fmt(ms, { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+  function dayStr(ms) {
+    var n = now();
+    if (dayKey(ms) === dayKey(n)) return 'Today';
+    if (dayKey(ms) === dayKey(n + 86400000)) return 'Tomorrow';
+    return fmt(ms, { weekday: 'long', month: 'short', day: 'numeric' });
+  }
+  function shortUrl(u) { return String(u || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''); }
+
+  function qrSvg(text) {
+    var q = new window.QRCodeLib(-1, window.QRCodeLib.ErrorCorrectLevel.M);
+    q.addData(text); q.make();
+    var n = q.getModuleCount(), qz = 4, size = n + qz * 2, d = '';
+    for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) {
+      if (q.isDark(r, c)) d += 'M' + (c + qz) + ' ' + (r + qz) + 'h1v1h-1z';
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size +
+      '" shape-rendering="crispEdges"><rect width="' + size + '" height="' + size +
+      '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+  }
+  var qrMemo = {};
+  function qrFor(text) { return qrMemo[text] || (qrMemo[text] = qrSvg(text)); }
+
+  /* ---------------- data ---------------- */
+  function saveCache(d) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {} }
+  function loadCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch (e) { return null; } }
+
+  function jsonp(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      var cb = 'kioskCb' + Date.now();
+      var s = document.createElement('script');
+      var timer = setTimeout(function () { cleanup(); reject(new Error('timeout')); }, timeoutMs);
+      function cleanup() { clearTimeout(timer); try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); }
+      window[cb] = function (data) { cleanup(); resolve(data); };
+      s.onerror = function () { cleanup(); reject(new Error('network')); };
+      s.src = url + (url.indexOf('?') < 0 ? '?' : '&') + 'callback=' + cb + '&t=' + Date.now();
+      document.head.appendChild(s);
+    });
+  }
+  function getJson(url) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 20000);
+    return fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now(),
+      { cache: 'no-store', redirect: 'follow', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) { clearTimeout(timer); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function refresh() {
+    var p = USE_SAMPLE ? getJson('sample-feed.json')
+      : getJson(FEED).catch(function () { return jsonp(FEED, 20000); });
+    return p.then(function (d) {
+      if (!d || !d.events) throw new Error('bad feed');
+      feed = d; lastFetchOk = Date.now(); lastFetchErr = '';
+      if (!USE_SAMPLE) saveCache(d);
+      qrSig = flyerSig = ''; render();
+    }).catch(function (e) {
+      lastFetchErr = String(e && e.message || e);
+      render();
+    });
+  }
+
+  /* ---------------- selection logic ---------------- */
+  function activeQr() {
+    if (!feed) return [];
+    var n = now(), out = [], today = dayKey(n);
+    (feed.events || []).forEach(function (e) {
+      if (e.showQr === 'no' || !e.link) return;
+      var st = Date.parse(e.start);
+      if (dayKey(st) !== today) return;            // QR codes only for today's events
+      var before = (e.doorsBefore != null ? e.doorsBefore : S('doors_before_min')) * 60000;
+      var after = (e.doorsAfter != null ? e.doorsAfter : S('doors_after_min')) * 60000;
+      if (e.showQr === 'pin' || (n >= st - before && n <= st + after)) {
+        out.push({ key: 'e' + e.id, header: e.header, caption: e.caption, room: e.room, start: st,
+          link: e.link, soldOut: e.soldOut, waitlist: e.waitlist, pinned: e.showQr === 'pin' });
+      }
+    });
+    (feed.manual || []).forEach(function (m) {
+      if (m.type !== 'qr' || !m.link) return;
+      var from = m.from ? Date.parse(m.from) : -Infinity, until = m.until ? Date.parse(m.until) : Infinity;
+      if (n >= from && n <= until) out.push({ key: m.id, header: m.header, caption: m.caption, link: m.link, start: Infinity, manual: true });
+    });
+    out.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || a.start - b.start; });
+    return out;
+  }
+
+  function nextDoorOpening() {
+    if (!feed) return null;
+    var n = now(), best = null;
+    (feed.events || []).forEach(function (e) {
+      if (e.showQr === 'no') return;
+      var st = Date.parse(e.start);
+      var before = (e.doorsBefore != null ? e.doorsBefore : S('doors_before_min')) * 60000;
+      if (dayKey(st) === dayKey(n) && st - before > n && (!best || st < best.st)) best = { st: st, open: st - before, e: e };
+    });
+    return best;
+  }
+
+  function flyerList() {
+    if (!feed) return [];
+    var n = now(), horizon = n + S('flyer_days_ahead') * 86400000;
+    var groups = {}, order = [];
+    (feed.events || []).forEach(function (e) {
+      var st = Date.parse(e.start);
+      if (e.flyer === 'no' || st < n) return;
+      if (e.flyer !== 'yes' && st > horizon) return;
+      var k = e.image ? 'i:' + e.image : 'h:' + e.header;
+      if (!groups[k]) { groups[k] = { e: e, start: st, more: [] }; order.push(k); }
+      else groups[k].more.push(st);
+    });
+    var list = order.map(function (k) { var g = groups[k]; return {
+      key: g.e.id, header: g.e.header, caption: g.e.caption, room: g.e.room, image: g.e.image,
+      link: g.e.link, start: g.start, more: g.more, soldOut: g.e.soldOut }; });
+    list.sort(function (a, b) { return a.start - b.start; });
+    (feed.manual || []).forEach(function (m) {
+      if (m.type !== 'flyer') return;
+      var from = m.from ? Date.parse(m.from) : -Infinity, until = m.until ? Date.parse(m.until) : Infinity;
+      if (n >= from && n <= until) list.push({ key: m.id, header: m.header, caption: m.caption, image: m.image, link: m.link, manual: true });
+    });
+    return list;
+  }
+
+  function currentMode(qrItems) {
+    var autoMode = qrItems.length ? 'qr' : 'flyers';
+    if (manual) {
+      if (Date.now() - manual.lastTouch > S('manual_timeout_min') * 60000) manual = null;
+      else return manual.mode;
+    }
+    return autoMode;
+  }
+
+  /* ---------------- rendering: QR ---------------- */
+  function layoutFor(n, W, H) {
+    var best = { cols: 1, rows: 1, qr: 0 };
+    for (var cols = 1; cols <= n; cols++) {
+      var rows = Math.ceil(n / cols);
+      if (rows * cols - n >= cols) continue;
+      var cw = W / cols, ch = H / rows;
+      var u = Math.max(12, Math.min(cw / 17, ch / 16, 30));     // text unit
+      var qr = Math.min(cw - u * 2.0, ch - u * 8.3);              // room left for the code
+      if (qr > best.qr) best = { cols: cols, rows: rows, qr: qr, u: u };
+    }
+    return best;
+  }
+
+  function renderQr(items) {
+    var stage = $('qrStage');
+    var per = Math.max(1, Math.min(4, S('max_codes_per_screen')));
+    var pages = Math.max(1, Math.ceil(items.length / per));
+    if (Date.now() - qrPageAt > S('rotate_seconds') * 1000) { qrPage++; qrPageAt = Date.now(); }
+    if (qrPage >= pages) qrPage = 0;
+    var pageItems = items.slice(qrPage * per, qrPage * per + per);
+    var minute = Math.floor(now() / 60000);
+    var sig = JSON.stringify([pageItems.map(function (i) { return i.key + i.soldOut; }), qrPage, pages, minute,
+      stage.clientWidth, stage.clientHeight]);
+    if (sig === qrSig) return;
+    qrSig = sig;
+
+    if (!items.length) {
+      var nx = nextDoorOpening();
+      stage.innerHTML = '<div class="empty"><h2>No door sales open right now</h2><p>' +
+        (nx ? 'Ticket codes for <b>' + esc(nx.e.header) + '</b> appear here at ' + esc(timeStr(nx.open)) +
+          (dayKey(nx.open) !== dayKey(now()) ? ' on ' + esc(dayStr(nx.open)) : '') + '.' : 'No more door sales today. Tap “Upcoming” to see what’s coming up.') +
+        '</p></div>';
+      return;
+    }
+    var pad = parseFloat(getComputedStyle(stage).paddingLeft) || 16;
+    var W = stage.clientWidth - pad * 2, H = stage.clientHeight - pad * 2 - (pages > 1 ? 14 : 0);
+    var L = layoutFor(pageItems.length, W, H);
+    var u = L.u;
+    var html = '<div class="grid" style="grid-template-columns:repeat(' + L.cols + ',1fr);grid-template-rows:repeat(' +
+      L.rows + ',1fr);bottom:' + (pad + (pages > 1 ? 14 : 0)) + 'px">';
+    pageItems.forEach(function (it) {
+      var n = now(), when = '';
+      if (!it.manual) {
+        var mins = Math.round((it.start - n) / 60000);
+        when = mins > 0 ? '<span class="when">in ' + mins + ' min</span>'
+          : '<span class="when late">started ' + (mins === 0 ? 'now' : -mins + ' min ago') + '</span>';
+      }
+      var meta = it.manual ? '' : esc(timeStr(it.start)) + (it.room ? ' · ' + esc(it.room) : '') + when;
+      html += '<div class="card" style="--u:' + u.toFixed(1) + 'px"><div class="head"><h2>' + esc(it.header) + '</h2>' +
+        (it.caption ? '<div class="cap">' + esc(it.caption) + '</div>' : '') +
+        (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>';
+      if (it.soldOut && !it.waitlist) {
+        html += '<div class="soldout">Sold out</div><div class="url">&nbsp;</div>';
+      } else {
+        html += '<div class="qr">' + qrFor(it.link) + '</div>' +
+          '<div class="url">' + (it.soldOut ? 'Sold out — join the waitlist · ' : '') + esc(shortUrl(it.link)) + '</div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    if (pages > 1) {
+      html += '<div class="pager">';
+      for (var p = 0; p < pages; p++) html += '<i class="' + (p === qrPage ? 'on' : '') + '"></i>';
+      html += '</div>';
+    }
+    stage.innerHTML = html;
+    // size each code to the largest square that fits the space left in its card
+    Array.prototype.forEach.call(stage.querySelectorAll('.card .qr'), function (box) {
+      var size = Math.max(60, Math.floor(Math.min(box.clientWidth, box.clientHeight)));
+      var svg = box.firstChild; svg.style.width = svg.style.height = size + 'px';
+    });
+  }
+
+  /* ---------------- rendering: flyers ---------------- */
+  function renderFlyers(list) {
+    var track = $('track');
+    var sig = JSON.stringify([list.map(function (f) { return f.key; }), dayKey(now())]);
+    if (sig !== flyerSig) {
+      flyerSig = sig;
+      if (!list.length) {
+        track.innerHTML = '<div class="slide text"><div class="art"><div class="mark">The Berkeley<br>Alembic</div></div>' +
+          '<div class="info"><h2>Welcome</h2><div class="cap">berkeleyalembic.org</div></div></div>';
+      } else {
+        track.innerHTML = list.map(function (f) {
+          var date = '';
+          if (!f.manual) {
+            date = '<div class="date">' + esc(dayStr(f.start)) + ' · ' + esc(timeStr(f.start)) +
+              '<small>' + (f.room ? esc(f.room) : '') +
+              (f.more && f.more.length ? (f.room ? ' · ' : '') + 'Also ' + f.more.slice(0, 3).map(function (m) {
+                return esc(fmt(m, { month: 'short', day: 'numeric' }));
+              }).join(', ') + (f.more.length > 3 ? ' + more' : '') : '') + '</small></div>';
+          }
+          var art = f.image
+            ? '<div class="art"><img class="blur" src="' + esc(f.image) + '" alt=""><img class="img" src="' + esc(f.image) + '" alt=""></div>'
+            : '<div class="art"><div class="mark">' + esc(f.header) + '</div></div>';
+          var mini = f.link && !f.soldOut ? '<div class="mini"><div class="qr">' + qrFor(f.link) +
+            '</div><span>Scan for details<br>and tickets</span></div>'
+            : (f.soldOut ? '<div class="mini"><span>Sold out</span></div>' : '');
+          return '<div class="slide' + (f.image ? '' : ' text') + '">' + art + '<div class="info">' + date +
+            '<h2>' + esc(f.header) + '</h2>' + (f.caption ? '<div class="cap">' + esc(f.caption) + '</div>' : '') +
+            mini + '</div></div>';
+        }).join('');
+        // broken image → text card
+        Array.prototype.forEach.call(track.querySelectorAll('img.img'), function (img) {
+          img.onerror = function () {
+            var slide = img.closest('.slide'), art = img.parentNode;
+            slide.classList.add('text');
+            art.innerHTML = '<div class="mark">' + esc(slide.querySelector('h2').textContent) + '</div>';
+          };
+        });
+      }
+      var dots = '';
+      var count = Math.max(1, list.length);
+      if (count > 1 && count <= 30) for (var i = 0; i < count; i++) dots += '<i></i>';
+      $('dots').innerHTML = dots;
+      $('prev').style.display = $('next').style.display = count > 1 ? '' : 'none';
+      flyerIdx = Math.min(flyerIdx, count - 1);
+      track.scrollLeft = flyerIdx * track.clientWidth;
+    }
+    markDots();
+  }
+  function markDots() {
+    var d = $('dots').children;
+    for (var i = 0; i < d.length; i++) d[i].className = i === flyerIdx ? 'on' : '';
+  }
+  function goFlyer(i, smooth) {
+    var track = $('track'), n = track.children.length;
+    if (!n) return;
+    flyerIdx = (i + n) % n;
+    if (smooth && 'scrollBehavior' in document.documentElement.style) {
+      track.scrollTo({ left: flyerIdx * track.clientWidth, behavior: 'smooth' });
+    } else {
+      track.scrollLeft = flyerIdx * track.clientWidth;
+    }
+    markDots();
+  }
+
+  /* ---------------- main render ---------------- */
+  var lastMode = '';
+  function render() {
+    var n = now();
+    var clock = esc(timeStr(n)) + '<small>' + esc(fmt(n, { weekday: 'short', month: 'short', day: 'numeric' })) + '</small>';
+    $('clock').innerHTML = clock;
+    $('qrSub').textContent = S('qr_subhead');
+
+    var items = activeQr();
+    var mode = currentMode(items);
+    if (mode !== lastMode) {
+      $('qrScreen').classList.toggle('on', mode === 'qr');
+      $('flyerScreen').classList.toggle('on', mode === 'flyers');
+      document.body.classList.toggle('flyers', mode === 'flyers');
+      Array.prototype.forEach.call(document.querySelectorAll('#toggle button'), function (b) {
+        b.classList.toggle('on', b.getAttribute('data-mode') === mode);
+      });
+      qrSig = ''; flyerSig = '';
+      lastMode = mode;
+    }
+    var hl = mode === 'qr' ? S('qr_headline') : S('flyer_headline');
+    if ($('headline').textContent !== hl) {
+      $('headline').textContent = hl;
+      qrSig = '';
+    }
+    if (mode === 'qr') renderQr(items); else renderFlyers(flyerList());
+    renderStatus();
+  }
+
+  function renderStatus() {
+    var el = $('status'), txt = '';
+    var cls = '';
+    var age = Date.now() - lastFetchOk;
+    if (!feed) { cls = 'bad'; txt = 'No event data yet' + (lastFetchErr ? ' (' + lastFetchErr + ')' : ''); }
+    else if (USE_SAMPLE) { cls = 'stale'; txt = 'Sample data — set feedUrl in config.js'; }
+    else if (!lastFetchOk || age > REFRESH_MS * 3) {
+      cls = 'stale'; txt = 'Offline — showing data from ' + timeStr(Date.parse(feed.generated));
+    } else if (feed.syncError) {
+      cls = 'stale'; txt = 'Momence sync problem (see Sheet)';
+    }
+    el.className = cls;
+    $('statusText').textContent = txt;
+  }
+
+  /* ---------------- interaction ---------------- */
+  Array.prototype.forEach.call(document.querySelectorAll('#toggle button'), function (b) {
+    b.addEventListener('click', function () {
+      manual = { mode: b.getAttribute('data-mode'), lastTouch: Date.now() };
+      render();
+    });
+  });
+  document.addEventListener('touchstart', function () { if (manual) manual.lastTouch = Date.now(); }, { passive: true });
+  document.addEventListener('mousedown', function () { if (manual) manual.lastTouch = Date.now(); });
+
+  var track = $('track'), scrollTimer = null;
+  track.addEventListener('scroll', function () {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function () {
+      var i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      if (i !== flyerIdx) { flyerIdx = i; markDots(); }
+    }, 80);
+  }, { passive: true });
+  track.addEventListener('touchstart', function () { flyerTouchAt = Date.now(); }, { passive: true });
+  $('prev').addEventListener('click', function () { flyerTouchAt = Date.now(); goFlyer(flyerIdx - 1, true); });
+  $('next').addEventListener('click', function () { flyerTouchAt = Date.now(); goFlyer(flyerIdx + 1, true); });
+  window.addEventListener('resize', function () { qrSig = ''; flyerSig = ''; render(); });
+
+  /* ---------------- timers ---------------- */
+  setInterval(function () {
+    render();
+    // auto-advance flyers unless someone touched them in the last 30 s
+    if (lastMode === 'flyers' && Date.now() - flyerTouchAt > 30000 &&
+        Date.now() - flyerAdvAt > S('flyer_seconds') * 1000) {
+      flyerAdvAt = Date.now(); goFlyer(flyerIdx + 1, true);
+    }
+  }, 1000);
+  setInterval(refresh, REFRESH_MS);
+
+  // Reload once a night (~4 AM) to pick up page updates, but only if the server is reachable
+  setInterval(function () {
+    var hour = Number(fmt(Date.now(), { hour: 'numeric', hour12: false }));
+    if (hour === 4 && Date.now() - loadedAt > 6 * 3600000 && navigator.onLine) {
+      fetch(location.pathname + '?ping=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { if (r.ok) location.reload(); }).catch(function () {});
+    }
+  }, 10 * 60000);
+
+  /* ---------------- start ---------------- */
+  if (!USE_SAMPLE) { var cached = loadCache(); if (cached && cached.events) feed = cached; }
+  render();
+  refresh();
+})();
+</script>
+</body>
+</html>
