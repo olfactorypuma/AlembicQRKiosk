@@ -17,8 +17,10 @@
   --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
   --mono:ui-monospace,Menlo,"SF Mono",Consolas,monospace;
   --pad:max(16px,2.2vmin);
-  --fade:1.6s;     /* flyer-to-flyer crossfade */
-  --out:.8s; --in:1s;   /* screen and ticket-card changes: fade out, then fade in */
+  --fade:2.1s;     /* flyer-to-flyer crossfade (everything on the slide fades together) */
+  --quick:1.2s;    /* crossfade after a swipe or arrow tap */
+  --out:1.05s; --in:1.25s;   /* screen and ticket-card changes: fade out, then fade in */
+  --drift:40s;     /* slow picture drift; set from flyer_seconds */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
@@ -36,7 +38,7 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
   padding:var(--pad) var(--pad) calc(var(--pad)*.6);border-bottom:1px solid var(--line)}
 .bar h1{font-family:var(--serif);font-weight:600;font-size:clamp(26px,5.2vmin,58px);line-height:1.05;letter-spacing:-.01em}
 .bar p{color:var(--muted);font-size:clamp(15px,2.5vmin,25px);margin-top:6px}
-.bar h1,.bar p{transition:opacity .7s ease-in-out}
+.bar h1,.bar p{transition:opacity var(--out) ease-in-out}
 .bar .fading{opacity:0}
 .bar .phone{display:inline-block;width:.8em;height:1.15em;border:2px solid currentColor;border-radius:.18em;vertical-align:-.2em;margin-right:.4em;opacity:.8}
 .bar .titles{min-width:0}
@@ -77,23 +79,16 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
 .slide{position:absolute;inset:0;display:flex;overflow:hidden;opacity:0;z-index:0;
   transition:opacity var(--fade) ease-in-out;will-change:opacity}
 .slide.on{opacity:1;z-index:1}
-#track.quick .slide{transition-duration:.7s}
+#track.quick .slide{transition-duration:var(--quick)}
 .slide .art{position:relative;flex:1.3;min-width:0;min-height:0;overflow:hidden;background:var(--bg2)}
 .slide .art .blur{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;
   filter:blur(28px) saturate(1.1);opacity:.45}
 .slide .art .img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
-  transform:scale(1);transition:transform 1s ease-out}
-.slide.on .art .img{transform:scale(1.035);transition:transform 16s linear}   /* slow drift while showing */
+  transform:scale(1);transition:transform 0s linear var(--fade)}   /* reset only after it has faded out */
+.slide.on .art .img{transform:scale(1.035);transition:transform var(--drift) linear}   /* slow drift while showing */
 .slide .info{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;justify-content:center;
   gap:clamp(12px,2.4vmin,26px);padding:clamp(22px,4.4vmin,52px)}
 .slide .txt{display:flex;flex-direction:column;gap:clamp(8px,1.6vmin,16px);min-height:0}
-.slide .info .txt > *,.slide .info .mini{opacity:0;transform:translateY(12px);
-  transition:opacity .6s ease-in,transform .6s ease-in}
-.slide.on .info .txt > *,.slide.on .info .mini{opacity:1;transform:none;
-  transition:opacity 1.2s ease-out .7s,transform 1.6s ease-out .7s}
-.slide.on .info .txt > :nth-child(2){transition-delay:.9s}
-.slide.on .info .txt > :nth-child(3){transition-delay:1.1s}
-.slide.on .info .mini{transition-delay:1.3s}
 .slide .date{font-family:var(--serif);color:var(--accent);font-size:clamp(22px,4.6vmin,46px);line-height:1.1}
 .slide .date small{display:block;font-family:var(--sans);color:var(--muted);font-size:clamp(15px,2.4vmin,24px);margin-top:.35em}
 .slide h2{font-family:var(--serif);font-weight:600;font-size:7vmin;line-height:1.06;letter-spacing:-.01em;overflow:hidden}
@@ -121,7 +116,6 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
 }
 @media (prefers-reduced-motion:reduce){
   .slide.on .art .img{transform:none}
-  .slide .info .txt > *,.slide .info .mini{transform:none}
 }
 .dots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:7px;pointer-events:none}
 .dots{z-index:2}
@@ -200,7 +194,7 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
 
   var DEFAULTS = {
     doors_before_min: 15, doors_after_min: 15,
-    max_codes_per_screen: 4, rotate_seconds: 15, flyer_days_ahead: 30, flyer_seconds: 12,
+    max_codes_per_screen: 4, rotate_seconds: 15, flyer_days_ahead: 30, flyer_seconds: 40,
     manual_timeout_min: 3,
     qr_headline: 'Skip the line — buy your ticket here',
     qr_subhead: 'Open your phone camera and point it at the code',
@@ -211,7 +205,7 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
   var feed = null, lastFetchOk = 0, lastFetchErr = '';
   var manual = null;            // {mode, lastTouch}
   var qrPage = 0, qrPageAt = Date.now(), qrSig = '', qrSetSig = '', flyerSig = '';
-  var FADE_MS = 1800;   // --out + --in
+  var FADE_MS = 2300;   // --out + --in
   var flyerIdx = 0, flyerTouchAt = 0, flyerAdvAt = Date.now();
   var loadedAt = Date.now();
 
@@ -525,6 +519,7 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
 
   function showFlyer(i, quick) {
     var track = $('track'), slides = track.children, n = slides.length;
+    track.style.setProperty('--drift', S('flyer_seconds') + 's');
     if (!n) return;
     flyerIdx = (i + n) % n;
     track.classList.toggle('quick', !!quick);
@@ -572,7 +567,7 @@ body{font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-t
     }
     if (first) { swap(); return; }
     els.forEach(function (e) { e.classList.add('fading'); });
-    clearTimeout(barTimer); barTimer = setTimeout(swap, 700);
+    clearTimeout(barTimer); barTimer = setTimeout(swap, 1050);
   }
 
   function renderStatus() {
